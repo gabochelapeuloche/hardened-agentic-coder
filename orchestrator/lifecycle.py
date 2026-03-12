@@ -1,7 +1,7 @@
 import shutil
-import subprocess
 import tempfile
 import uuid
+import os
 from pathlib import Path
 
 import git
@@ -10,6 +10,12 @@ import podman
 CONTAINER_IMAGE = "docker.io/library/alpine:3.21"
 SANDBOX_MEMORY = "2g"
 SANDBOX_CPUS = 2.0
+
+
+def _podman_client() -> podman.PodmanClient:
+    """Return a PodmanClient connected to the rootless socket."""
+    socket_path = f"unix://{os.environ['XDG_RUNTIME_DIR']}/podman/podman.sock"
+    return podman.PodmanClient(base_url=socket_path)
 
 
 def spawn(repo: Path) -> str:
@@ -28,14 +34,11 @@ def spawn(repo: Path) -> str:
     )
     git.Repo.clone_from(str(repo), str(shadow_dir))
 
-    # 2. Remonter le shadow dir en noexec sur le host
-    subprocess.run(
-        ["mount", "--bind", "-o", "remount,noexec", str(shadow_dir), str(shadow_dir)],
-        check=True,
-    )
+    # Shadow clone en RAM — /dev/shm est tmpfs, éphémère par nature
+    # noexec géré côté container via les options de mount Podman
 
     # 3. Connexion au socket Podman rootless
-    client = podman.PodmanClient()
+    client = _podman_client()
 
     # 4. Démarrer le container durci
     container = client.containers.run(
@@ -48,7 +51,7 @@ def spawn(repo: Path) -> str:
                 "type": "bind",
                 "source": str(shadow_dir),
                 "target": "/workspace",
-                "options": ["rw"],
+                "options": ["rw", "noexec"],
             }
         ],
         security_opt=["no-new-privileges"],
@@ -70,7 +73,7 @@ def teardown(container_id: str) -> None:
     Args:
         container_id: The container ID returned by spawn().
     """
-    client = podman.PodmanClient()
+    client = _podman_client()
     container = client.containers.get(container_id)
 
     shadow_dir = container.labels.get("agent.shadow_dir")

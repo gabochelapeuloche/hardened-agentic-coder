@@ -1,13 +1,20 @@
 import podman
 import git
+import os
 from pathlib import Path
+
+
+def _podman_client() -> podman.PodmanClient:
+    """Return a PodmanClient connected to the rootless socket."""
+    socket_path = f"unix://{os.environ['XDG_RUNTIME_DIR']}/podman/podman.sock"
+    return podman.PodmanClient(base_url=socket_path)
 
 
 def validate_diff(container_id: str, repo: Path) -> str:
     """Read and validate the diff produced inside the sandbox."""
 
     # Instancie le client podman pour récupérer le mount fs dans les labels
-    client = podman.PodmanClient()
+    client = _podman_client()
     container = client.containers.get(container_id)
     shadow_dir = container.labels.get("agent.shadow_dir")
 
