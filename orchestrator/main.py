@@ -46,7 +46,7 @@ def run(
         # 5. Human confirmation
         confirm = typer.confirm("Apply this diff to your repo?")
         if confirm:
-            apply_diff
+            apply_diff(container_id, repo)
             typer.echo("[+] Diff applied.")
         else:
             typer.echo("[!] Diff rejected — repo unchanged.")
