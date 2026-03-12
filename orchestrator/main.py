@@ -1,7 +1,7 @@
 import typer
 from pathlib import Path
 from lifecycle import spawn, teardown
-from reconciler import validate_diff
+from reconciler import apply_diff, validate_diff
 
 app = typer.Typer(help="Hardened Agentic Coder — local isolated coding agent")
 
@@ -46,6 +46,7 @@ def run(
         # 5. Human confirmation
         confirm = typer.confirm("Apply this diff to your repo?")
         if confirm:
+            apply_diff
             typer.echo("[+] Diff applied.")
         else:
             typer.echo("[!] Diff rejected — repo unchanged.")
