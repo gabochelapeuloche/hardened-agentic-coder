@@ -41,7 +41,7 @@ def log_session(
     con = init_db(DB_PATH)
     cur = con.cursor()
     cur.execute(
-        "INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (
             session_id,
             feature_tag,
