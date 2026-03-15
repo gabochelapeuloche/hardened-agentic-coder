@@ -1,6 +1,7 @@
 import podman
 import git
 import os
+import tempfile
 from pathlib import Path
 
 
@@ -13,22 +14,39 @@ def _podman_client() -> podman.PodmanClient:
 def validate_diff(container_id: str, repo: Path) -> str:
     """Read and validate the diff produced inside the sandbox."""
 
-    # Instancie le client podman pour récupérer le mount fs dans les labels
     client = _podman_client()
     container = client.containers.get(container_id)
     shadow_dir = container.labels.get("agent.shadow_dir")
 
-    # returns the diff file in a string
     shadow_repo = git.Repo(shadow_dir)
-    return shadow_repo.git.diff()
+
+    # Inclure les fichiers modifiés ET les nouveaux fichiers non trackés
+    diff = shadow_repo.git.diff()
+    untracked = shadow_repo.untracked_files
+
+    if untracked:
+        # Stager les nouveaux fichiers pour les inclure dans le diff
+        shadow_repo.index.add(untracked)
+        diff += shadow_repo.git.diff("--cached")
+
+    return diff
 
 
 def apply_diff(container_id: str, repo: Path) -> None:
     """Apply the validated diff to the real repo."""
 
-    # Récupérer le diff depuis le shadow clone
     diff = validate_diff(container_id, repo)
 
-    # Appliquer sur le vrai repo
+    # Écrire le diff dans un fichier temporaire
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".patch", delete=False) as f:
+        f.write(diff)
+        patch_path = f.name
+
+        # print(f"[DEBUG] patch path: {patch_path}", file=sys.stderr)
+        # print(f"[DEBUG] diff repr: {repr(diff[:200])}", file=sys.stderr)
+
     real_repo = git.Repo(repo)
-    real_repo.git.apply(diff)
+    real_repo.git.apply(patch_path)
+
+    # Nettoyer le fichier temporaire
+    Path(patch_path).unlink()

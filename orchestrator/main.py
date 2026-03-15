@@ -1,4 +1,7 @@
 import typer
+import subprocess
+import os
+import json
 from pathlib import Path
 from lifecycle import spawn, teardown
 from reconciler import apply_diff, validate_diff
@@ -28,8 +31,37 @@ def run(
     typer.echo(f"[+] Sandbox up : {container_id[:12]}")
 
     try:
-        # 3. Placeholder — MCP server call (Phase 3)
-        typer.echo("[*] Agent running... (MCP stub — Phase 3)")
+        # 3. Appel MCP server
+        typer.echo("[*] Agent running...")
+        mcp_request = json.dumps(
+            {
+                "task": task,
+                "project_id": repo.name,
+                "feature_tag": "feature",
+                "container_id": container_id,
+            }
+        )
+
+        mcp_python = (
+            Path(__file__).parent.parent / "mcp-server" / ".venv" / "bin" / "python3"
+        )
+        mcp_server = Path(__file__).parent.parent / "mcp-server" / "server.py"
+
+        mcp_proc = subprocess.run(
+            [str(mcp_python), str(mcp_server)],
+            input=mcp_request,
+            capture_output=True,
+            text=True,
+            env={**os.environ, "AGENT_VERBOSE": "1"},
+        )
+
+        # Afficher les logs verbose du MCP server
+        if mcp_proc.stderr:
+            typer.echo(mcp_proc.stderr)
+
+        # Parser la réponse
+        mcp_response = json.loads(mcp_proc.stdout)
+        typer.echo(f"[+] Agent done : {mcp_response.get('summary', '')}")
 
         # 4. Validate diff
         typer.echo("[*] Validating diff...")

@@ -5,6 +5,7 @@ import uuid
 import re
 import ollama
 import podman
+from pathlib import Path
 from datetime import datetime
 from scrubber import scrub_input, scrub_output
 from telemetry import log_session
@@ -39,15 +40,18 @@ The workspace is at /workspace. Only modify files in /workspace.
 
 VERBOSE = True
 
+
 def set_verbose(value: bool) -> None:
     """Enable or disable verbose logging."""
     global VERBOSE
     VERBOSE = value
 
+
 def _log(msg: str) -> None:
     """Print a message to stderr if verbose mode is enabled."""
     if VERBOSE:
         print(msg, file=sys.stderr)
+
 
 def _extract_json(raw: str) -> str:
     """Strip markdown code fences from LLM response."""
@@ -56,6 +60,7 @@ def _extract_json(raw: str) -> str:
     if match:
         return match.group(1)
     return raw.strip()
+
 
 def _podman_client() -> podman.PodmanClient:
     """Return a PodmanClient connected to the rootless socket."""
@@ -79,20 +84,41 @@ def execute_action(container_id: str, action: str, params: dict) -> str:
     container = client.containers.get(container_id)
 
     if action == "read_file":
+        # path = params.get("path", "")
+        # exit_code, output = container.exec_run(["cat", path])
+        # return output.decode() if output else "[empty file]"
+
         path = params.get("path", "")
-        exit_code, output = container.exec_run(["cat", path])
+        _, output = container.exec_run(["cat", path])
         return output.decode() if output else "[empty file]"
 
     elif action == "write_file":
         path = params.get("path", "")
         content = params.get("content", "")
-        exit_code, output = container.exec_run(
-            ["sh", "-c", f"cat > {path} << 'AGENT_EOF'\n{content}\nAGENT_EOF"]
-        )
+
+        # Récupérer le shadow dir depuis les labels du container
+        shadow_dir = container.labels.get("agent.shadow_dir")
+
+        # Convertir /workspace/main.py → /dev/shm/agent-xxx/main.py
+        relative_path = path.replace("/workspace/", "")
+        host_path = Path(shadow_dir) / relative_path
+
+        # Bloquer les tentatives de path traversal
+        if not str(host_path.resolve()).startswith(str(Path(shadow_dir).resolve())):
+            return "[error: path traversal attempt blocked]"
+
+        host_path.parent.mkdir(parents=True, exist_ok=True)
+        host_path.write_text(content)
+
         return f"[written {len(content)} chars to {path}]"
 
     elif action == "run_tests":
-        exit_code, output = container.exec_run(
+        # exit_code, output = container.exec_run(
+        #     ["sh", "-c", "cd /workspace && python -m pytest -x -q 2>&1 || true"]
+        # )
+        # return output.decode() if output else "[no output]"
+
+        _, output = container.exec_run(
             ["sh", "-c", "cd /workspace && python -m pytest -x -q 2>&1 || true"]
         )
         return output.decode() if output else "[no output]"
@@ -209,11 +235,12 @@ def handle_request(request: dict) -> dict:
 
     return {"summary": clean_summary, "session_id": session_id}
 
+
 def main() -> None:
     """
     MCP server main loop — reads JSON requests from stdin, writes responses to stdout.
     """
-    
+
     if os.environ.get("AGENT_VERBOSE", "").lower() in ("1", "true", "yes"):
         set_verbose(True)
 
