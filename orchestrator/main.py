@@ -13,6 +13,9 @@ app = typer.Typer(help="Hardened Agentic Coder — local isolated coding agent")
 def run(
     repo: Path = typer.Option(..., help="Path to the local git repository"),
     task: str = typer.Option(..., help="Coding task description for the agent"),
+    docs: Path | None = typer.Option(
+        None, help="Path to documentation directory (read-only)"
+    ),
 ):
     """
     Spin up a sandboxed coding agent, run a task, and propose a diff.
@@ -27,7 +30,7 @@ def run(
 
     # 2. Spawn sandbox
     typer.echo("[*] Spawning sandbox...")
-    container_id = spawn(repo)
+    container_id = spawn(repo, docs=docs)
     typer.echo(f"[+] Sandbox up : {container_id[:12]}")
 
     try:

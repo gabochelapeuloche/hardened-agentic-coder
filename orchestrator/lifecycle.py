@@ -7,7 +7,7 @@ from pathlib import Path
 import git
 import podman
 
-CONTAINER_IMAGE = "docker.io/library/alpine:3.21"
+CONTAINER_IMAGE = "localhost/hardened-agent-sandbox:1.0"
 SANDBOX_MEMORY = "2g"
 SANDBOX_CPUS = 2.0
 
@@ -18,7 +18,7 @@ def _podman_client() -> podman.PodmanClient:
     return podman.PodmanClient(base_url=socket_path)
 
 
-def spawn(repo: Path) -> str:
+def spawn(repo: Path, docs: Path | None = None) -> str:
     """
     Create a shadow clone of the repo and spin up a hardened sandbox container.
 
@@ -40,20 +40,34 @@ def spawn(repo: Path) -> str:
     # 3. Connexion au socket Podman rootless
     client = _podman_client()
 
-    # 4. Démarrer le container durci
+    # 3.1. Préparer les mounts
+    mounts = [
+        {
+            "type": "bind",
+            "source": str(shadow_dir),
+            "target": "/workspace",
+            "options": ["rw", "noexec"],
+        },
+    ]
+
+    # Monter la doc en read-only si fournie
+    if docs and docs.exists():
+        mounts.append(
+            {
+                "type": "bind",
+                "source": str(docs),
+                "target": "/docs",
+                "options": ["ro"],
+            }
+        )
+
+    # 4. Démarrer le container durci*
     container = client.containers.run(
         CONTAINER_IMAGE,
         command=["sleep", "infinity"],
         detach=True,
         remove=False,
-        mounts=[
-            {
-                "type": "bind",
-                "source": str(shadow_dir),
-                "target": "/workspace",
-                "options": ["rw", "noexec"],
-            }
-        ],
+        mounts=mounts,
         security_opt=["no-new-privileges"],
         cap_drop=["ALL"],
         read_only=True,
