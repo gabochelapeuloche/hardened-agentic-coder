@@ -53,14 +53,15 @@ def run(
         mcp_proc = subprocess.run(
             [str(mcp_python), str(mcp_server)],
             input=mcp_request,
-            capture_output=True,
+            stdout=subprocess.PIPE,  # capture stdout (la réponse JSON)
+            stderr=None,  # stderr va directement sur le terminal
             text=True,
             env={**os.environ, "AGENT_VERBOSE": "1"},
         )
 
         # Afficher les logs verbose du MCP server
-        if mcp_proc.stderr:
-            typer.echo(mcp_proc.stderr)
+        # if mcp_proc.stderr:
+        #     typer.echo(mcp_proc.stderr)
 
         # Parser la réponse
         mcp_response = json.loads(mcp_proc.stdout)

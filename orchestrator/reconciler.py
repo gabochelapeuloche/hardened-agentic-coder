@@ -20,14 +20,15 @@ def validate_diff(container_id: str, repo: Path) -> str:
 
     shadow_repo = git.Repo(shadow_dir)
 
-    # Inclure les fichiers modifiés ET les nouveaux fichiers non trackés
-    diff = shadow_repo.git.diff()
-    untracked = shadow_repo.untracked_files
+    # Stager tous les changements y compris nouveaux fichiers
+    shadow_repo.git.add("--all")
 
-    if untracked:
-        # Stager les nouveaux fichiers pour les inclure dans le diff
-        shadow_repo.index.add(untracked)
-        diff += shadow_repo.git.diff("--cached")
+    # Diff entre l'index et le dernier commit (ou tree vide si repo sans commit)
+    try:
+        diff = shadow_repo.git.diff("HEAD", "--cached")
+    except git.GitCommandError:
+        # Repo sans commit — comparer avec le tree vide
+        diff = shadow_repo.git.diff("--cached")
 
     return diff
 
@@ -46,7 +47,7 @@ def apply_diff(container_id: str, repo: Path) -> None:
         # print(f"[DEBUG] diff repr: {repr(diff[:200])}", file=sys.stderr)
 
     real_repo = git.Repo(repo)
-    real_repo.git.apply(patch_path)
+    real_repo.git.apply("--allow-empty", patch_path)
 
     # Nettoyer le fichier temporaire
     Path(patch_path).unlink()

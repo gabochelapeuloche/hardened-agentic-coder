@@ -12,7 +12,7 @@ from telemetry import log_session
 from token_counter import count_tokens
 
 OLLAMA_MODEL = "deepseek-coder-v2:16b"
-MAX_ITERATIONS = 5
+MAX_ITERATIONS = 10
 
 REACT_SYSTEM_PROMPT = """You are a coding agent operating inside a sandboxed environment.
 You have access to the following actions:
@@ -84,10 +84,6 @@ def execute_action(container_id: str, action: str, params: dict) -> str:
     container = client.containers.get(container_id)
 
     if action == "read_file":
-        # path = params.get("path", "")
-        # exit_code, output = container.exec_run(["cat", path])
-        # return output.decode() if output else "[empty file]"
-
         path = params.get("path", "")
         _, output = container.exec_run(["cat", path])
         return output.decode() if output else "[empty file]"
@@ -107,7 +103,12 @@ def execute_action(container_id: str, action: str, params: dict) -> str:
         if not str(host_path.resolve()).startswith(str(Path(shadow_dir).resolve())):
             return "[error: path traversal attempt blocked]"
 
-        host_path.parent.mkdir(parents=True, exist_ok=True)
+        (
+            host_path.parent.mkdir(parents=True, exist_ok=True)
+            if not host_path.parent.exists()
+            else None
+        )
+        # host_path.parent.mkdir(parents=True, exist_ok=True)
         host_path.write_text(content)
 
         return f"[written {len(content)} chars to {path}]"
