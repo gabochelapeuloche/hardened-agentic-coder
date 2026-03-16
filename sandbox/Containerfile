@@ -1,0 +1,14 @@
+FROM alpine:3.21
+
+RUN apk add --no-cache python3 py3-pip git \
+    && pip3 install --no-cache-dir pytest --break-system-packages --root-user-action=ignore \
+    && apk del py3-pip \
+    && rm -f /usr/bin/curl /bin/nc /usr/bin/nc \
+    && rm -rf /var/cache/apk/* /root/.cache \
+    && adduser -D -u 1000 agent \
+    && mkdir -p /workspace /docs \
+    && chown agent:agent /workspace /docs
+
+USER agent
+
+WORKDIR /workspace
